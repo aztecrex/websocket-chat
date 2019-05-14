@@ -1,9 +1,7 @@
 'use strict';
 const util = require('util');
 const AWS = require('aws-sdk');
-const {promisify} = require("es6-promisify");
 
-//const apigatewaymanagementapi = new AWS.ApiGatewayManagementApi({apiVersion: '2029', endpoint: url});
 const dynamo = new AWS.DynamoDB({ apiVersion: "2012-10-08" });
 
 const putItem = p => {
@@ -11,7 +9,7 @@ const putItem = p => {
     (resolve, reject) => {
       dynamo.putItem(p, (err,data) => {
         if (err) {reject (err);}
-        else {resolve(data);}
+        resolve(data);
       });
     }
   );
@@ -22,7 +20,7 @@ const deleteItem = p => {
     (resolve, reject) => {
       dynamo.deleteItem(p, (err,data) => {
         if (err) {reject (err);}
-        else {resolve(data);}
+        resolve(data);
       });
     }
   );
@@ -41,19 +39,25 @@ module.exports.hello = async (event) => {
 };
 
 const sendMessageToClient = (url, connectionId, payload) => new Promise((resolve, reject) => {
-  resolve({});
-//  apigatewaymanagementapi.postToConnection({
-//    ConnectionId: connectionId, // connectionId of the receiving ws-client
-//    Data: JSON.stringify(payload),
-//  }, (err, data) => {
-//    if (err) {
-//      console.log('err is', err);
-//      reject(err);
-//    }
-//    resolve(data);
-//  });
+  const apigatewaymanagementapi = new AWS.ApiGatewayManagementApi({apiVersion: '2029', endpoint: url});
+  apigatewaymanagementapi.postToConnection({
+    ConnectionId: connectionId, // connectionId of the receiving ws-client
+    Data: JSON.stringify(payload),
+  }, (err, data) => {
+    if (err) {
+      console.log('err is', err);
+      reject(err);
+    }
+    resolve(data);
+  });
 });
 
+
+const activeClients = async () =>  {
+  const params = { TableName: connections, ProjectionExpression: 'connectionId' };
+  const cdata = await dynamo.scan(params).promise();
+  return cdata.map(({connectionId}) => {return connectionIdl });
+};
 
 const recordConnection = async id => {
   const params = {
@@ -101,15 +105,16 @@ module.exports.disconnect = async (event, context) => {
 };
 
 module.exports.msock = async (event, context) => {
+  const clients = await activeClients();
+  console.log(JSON.stringify(clients));
+
   const domain = event.requestContext.domainName;
   const stage = event.requestContext.stage;
   const connectionId = event.requestContext.connectionId;
   const callbackUrlForAWS = util.format(util.format('https://%s/%s', domain, stage)); //construct the needed url
-  console.log("domain: ", domain);
-  console.log("stage: ", stage);
-  console.log("connection id: ", connectionId);
-  console.log("callback url: ", callbackUrlForAWS);
-  await sendMessageToClient(callbackUrlForAWS, connectionId, event);
+  clients.forEach(id => console.log("send to: ", id));
+//  clients.forEach(async id => { });
+//  await sendMessageToClient(callbackUrlForAWS, connectionId, event);
 
   return {
     statusCode: 200
