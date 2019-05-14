@@ -1,0 +1,24 @@
+{
+  "name": "burninator-serverless",
+  "version": "1.0.0",
+  "description": "",
+  "main": "handler.js",
+  "dependencies": {
+    "aws-sdk": "^2.454.0"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/cj-greenhouse/burninator-serverless.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/cj-greenhouse/burninator-serverless/issues"
+  },
+  "homepage": "https://github.com/cj-greenhouse/burninator-serverless#readme"
+}
