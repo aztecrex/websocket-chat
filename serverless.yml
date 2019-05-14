@@ -41,6 +41,19 @@ provider:
 #            - "Ref" : "ServerlessDeploymentBucket"
 #            - "/*"
 
+
+  environment:
+    DYNAMODB_TABLE: ${self:service}-${self:provider.stage}-connections
+  iamRoleStatements:
+    - Effect: Allow
+      Action:
+        - dynamodb:GetItem
+        - dynamodb:UpdateItem
+        - dynamodb:PutItem
+        - dynamodb:DeleteItem
+        - dynamodb:Scan
+      Resource: "arn:aws:dynamodb:${opt:region, self:provider.region}:*:table/${self:provider.environment.DYNAMODB_TABLE}"
+
 # you can define service wide environment variables here
 #  environment:
 #    variable1: value1
@@ -67,9 +80,13 @@ functions:
 #    NOTE: Please make sure to change your handler code to work with those events
 #    Check the event documentation for details
   hisocket:
-    handler: handler.csock
+    handler: handler.connect
     events:
       - websocket: $connect
+  byesocket:
+    handler: handler.disconnect
+    events:
+      - websocket: $disconnect
   speaksocket:
     handler: handler.msock
     events:
@@ -103,9 +120,20 @@ functions:
 #      variable2: value2
 
 # you can add CloudFormation resource templates here
-#resources:
-#  Resources:
-#    NewResource:
+resources:
+  Resources:
+    ConnectionsTable:
+      Type: 'AWS::DynamoDB::Table'
+      Properties:
+        AttributeDefinitions:
+          - AttributeName: connectionId
+            AttributeType: S
+        KeySchema:
+          - AttributeName: connectionId
+            KeyType: HASH
+        TableName: ${self:provider.environment.DYNAMODB_TABLE}
+        BillingMode: PAY_PER_REQUEST
+
 #      Type: AWS::S3::Bucket
 #      Properties:
 #        BucketName: my-new-bucket
