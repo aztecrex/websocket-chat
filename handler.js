@@ -42,7 +42,7 @@ const sendMessageToClient = (url, connectionId, payload) => new Promise((resolve
   const apigatewaymanagementapi = new AWS.ApiGatewayManagementApi({apiVersion: '2029', endpoint: url});
   apigatewaymanagementapi.postToConnection({
     ConnectionId: connectionId, // connectionId of the receiving ws-client
-    Data: JSON.stringify(payload),
+    Data: payload,
   }, (err, data) => {
     if (err) {
       console.log('err is', err);
@@ -56,7 +56,10 @@ const sendMessageToClient = (url, connectionId, payload) => new Promise((resolve
 const activeClients = async () =>  {
   const params = { TableName: connections, ProjectionExpression: 'connectionId' };
   const cdata = await dynamo.scan(params).promise();
-  return cdata.map(({connectionId}) => {return connectionIdl });
+  const rval = cdata.Items.map(({connectionId}) => connectionId.S);
+  console.log(JSON.stringify(rval));
+  return rval;
+//   return [];
 };
 
 const recordConnection = async id => {
@@ -85,7 +88,6 @@ module.exports.connect = async (event, context) => {
     await recordConnection(connectionId);
   } catch(err) {
     const resp = {statusCode: 500, body: `Failed to connect: ${connectionId} ${JSON.stringify(err)}`};
-    console.log(JSON.stringify(resp));
     return resp;
   }
   return {statusCode: 200, body: `connected: ${connectionId}`};
@@ -106,16 +108,23 @@ module.exports.disconnect = async (event, context) => {
 
 module.exports.msock = async (event, context) => {
   const clients = await activeClients();
-  console.log(JSON.stringify(clients));
 
   const domain = event.requestContext.domainName;
   const stage = event.requestContext.stage;
-  const connectionId = event.requestContext.connectionId;
-  const callbackUrlForAWS = util.format(util.format('https://%s/%s', domain, stage)); //construct the needed url
-  clients.forEach(id => console.log("send to: ", id));
-//  clients.forEach(async id => { });
-//  await sendMessageToClient(callbackUrlForAWS, connectionId, event);
-
+  const callbackUrlForAWS = util.format(util.format('https://%s/%s', domain, stage));
+  if (event.body) {
+    const msg = `${event.requestContext.requestTime}: ${event.body}`
+    const actions = clients.map(async id => {
+        console.log("send to: ", id);
+        try {
+            await sendMessageToClient(callbackUrlForAWS, id, msg);
+            return {};
+        } catch (err) {
+            console.log(`error sending to ${id}, ignoring`);
+        }
+        });
+    await Promise.all(actions);
+  }
   return {
     statusCode: 200
   };
