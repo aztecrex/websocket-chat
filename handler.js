@@ -1,6 +1,7 @@
 'use strict';
 const util = require('util');
 const AWS = require('aws-sdk');
+const moment = require('moment');
 
 const dynamo = new AWS.DynamoDB({ apiVersion: "2012-10-08" });
 
@@ -45,11 +46,12 @@ module.exports.hello = async (event) => {
   };
 };
 
-const sendMessageToClient = (gw, connectionId, payload) => new Promise((resolve, reject) => {
-  console.log(`sending ${payload} to ${connectionId}`);
+const sendMessageToClient = (gw, from, to, payload) => new Promise((resolve, reject) => {
+  console.log(`sending ${payload} to ${to}`);
+  const msg = `${from} ${now()}: ${payload}`
   gw.postToConnection({
-    ConnectionId: connectionId, // connectionId of the receiving ws-client
-    Data: payload,
+    ConnectionId: to,
+    Data: msg,
   }, (err, data) => {
     if (err) {
       console.log('err is', err);
@@ -58,9 +60,13 @@ const sendMessageToClient = (gw, connectionId, payload) => new Promise((resolve,
         resolve(data);
     }
   });
-  console.log(`gateway invoked ${connectionId}`);
+  console.log(`gateway invoked ${to}`);
 });
 
+const now = () => {
+  return moment().local().format("YYMMDD HH:mm");
+
+};
 
 const activeClients = async () =>  {
   const params = { TableName: connections, ProjectionExpression: 'connectionId' };
@@ -70,17 +76,17 @@ const activeClients = async () =>  {
   return rval;
 };
 
-const sendToAll = async (gw, msg) => {
+const sendToAll = async (gw, from, msg) => {
     const clients = await activeClients();
-    const actions = clients.map(async cid => sendMessageToClient(gw, cid, msg).catch(err => console.log(`error sending ${msg} to ${cid}: ${err}`)));
+    const actions = clients.map(async cid => sendMessageToClient(gw, from, cid, msg).catch(err => console.log(`error sending ${msg} to ${cid}: ${err}`)));
     return Promise.all(actions);
 };
 
-const sendToAllExcept = async (gw, msg, xid) => {
+const sendToAllExcept = async (gw, from, msg, xid) => {
   const clients = await activeClients();
   const actions = clients.map(async cid => {
     if (xid !== cid)
-      return sendMessageToClient(gw, cid, msg).catch(err => console.log(`error sending ${msg} to ${cid}: ${err}`));
+      return sendMessageToClient(gw, from, cid, msg).catch(err => console.log(`error sending ${msg} to ${cid}: ${err}`));
     else
       return Promise.resolve({});
   });
@@ -111,8 +117,7 @@ const forgetConnection = async id => {
 
 module.exports.connect = async (event, context) => {
   const connectionId = event.requestContext.connectionId;
-  const msg = `${event.requestContext.requestTime} ${connectionId}: ** Connected`
-  await sendToAllExcept(gateway(event), msg, connectionId);
+  await sendToAllExcept(gateway(event), connectionId, '** Connected', connectionId);
   try {
     await recordConnection(connectionId);
   } catch(err) {
@@ -125,8 +130,7 @@ module.exports.connect = async (event, context) => {
 
 module.exports.disconnect = async (event, context) => {
   const connectionId = event.requestContext.connectionId;
-  const msg = `${event.requestContext.requestTime} ${connectionId}: ** Disconnected`
-  await sendToAllExcept(gateway(event), msg, connectionId);
+  await sendToAllExcept(gateway(event),connectionId, '** Disconnected', connectionId);
   try {
     await forgetConnection(connectionId);
     return {statusCode: 200, body: `disconnected: ${connectionId}`};
@@ -140,8 +144,7 @@ module.exports.disconnect = async (event, context) => {
 module.exports.msock = async (event, context) => {
   if (event.body) {
     const connectionId = event.requestContext.connectionId;
-    const msg = `${event.requestContext.requestTime} ${connectionId}: ${event.body}`
-    await sendToAll(gateway(event), msg, event.requestContext.connectionId);
+    await sendToAll(gateway(event), connectionId, event.body, event.requestContext.connectionId);
     return {
       statusCode: 200
     };
