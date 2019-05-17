@@ -93,8 +93,6 @@ const sendToAllExcept = async (gw, from, msg, xid) => {
   return Promise.all(actions);
 };
 
-
-
 const recordConnection = async id => {
   const params = {
     TableName: connections,
@@ -120,13 +118,12 @@ module.exports.connect = async (event, context) => {
   await sendToAllExcept(gateway(event), connectionId, '** Connected', connectionId);
   try {
     await recordConnection(connectionId);
-  } catch(err) {
-    const resp = {statusCode: 500, body: `Failed to connect: ${connectionId} ${JSON.stringify(err)}`};
-    return resp;
+    return {statusCode: 200, body: `connected: ${connectionId}`};
+} catch(err) {
+    console.log(JSON.stringify(err));
+    return {statusCode: 500, body: 'Failed to connect.'};
   }
-  return {statusCode: 200, body: `connected: ${connectionId}`};
 };
-
 
 module.exports.disconnect = async (event, context) => {
   const connectionId = event.requestContext.connectionId;
@@ -135,19 +132,20 @@ module.exports.disconnect = async (event, context) => {
     await forgetConnection(connectionId);
     return {statusCode: 200, body: `disconnected: ${connectionId}`};
   } catch(err) {
-    const resp = {statusCode: 500, body: `Failed to disconnect: ${connectionId} ${JSON.stringify(err)}`};
-    console.log(JSON.stringify(resp));
-    return resp;
+    console.log(JSON.stringify(err));
+    return {statusCode: 500, body: 'Failed to disconnect.'};
   }
 };
 
 module.exports.msock = async (event, context) => {
   if (event.body) {
     const connectionId = event.requestContext.connectionId;
-    await sendToAll(gateway(event), connectionId, event.body, event.requestContext.connectionId);
-    return {
-      statusCode: 200
-    };
+    try {
+        await sendToAll(gateway(event), connectionId, event.body, event.requestContext.connectionId);
+        return {statusCode: 200};
+    } catch (err) {
+        console.log(JSON.stringify(err));
+        return {statusCode: 500, body: 'Failed to send.'};
+        }
   }
 };
-
