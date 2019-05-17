@@ -1,25 +1,26 @@
 {
-  "name": "burninator-serverless",
+  "name": "serverless-websocket-chat",
   "version": "1.0.0",
   "description": "",
   "main": "handler.js",
   "dependencies": {
-    "aws-sdk": "^2.454.0",
     "moment": "^2.24.0"
   },
-  "devDependencies": {},
+  "devDependencies": {
+    "aws-sdk": "^2.458.0"
+  },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/cj-greenhouse/burninator-serverless.git"
+    "url": "git+https://github.com/aztecrex/serverless-websocket-chat.git"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "bugs": {
-    "url": "https://github.com/cj-greenhouse/burninator-serverless/issues"
+    "url": "https://github.com/aztecrex/serverless-websocket-chat/issues"
   },
-  "homepage": "https://github.com/cj-greenhouse/burninator-serverless#readme"
+  "homepage": "https://github.com/aztecrex/serverless-websocket-chat#readme"
 }
