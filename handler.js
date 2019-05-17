@@ -9,8 +9,8 @@ const putItem = p => {
   return new Promise(
     (resolve, reject) => {
       dynamo.putItem(p, (err,data) => {
-        if (err) {reject (err);}
-        resolve(data);
+        if (err) reject (err);
+        else resolve(data);
       });
     }
   );
@@ -20,8 +20,8 @@ const deleteItem = p => {
   return new Promise(
     (resolve, reject) => {
       dynamo.deleteItem(p, (err,data) => {
-        if (err) {reject (err);}
-        resolve(data);
+        if (err) reject (err);
+        else resolve(data);
       });
     }
   );
