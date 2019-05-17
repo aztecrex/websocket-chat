@@ -39,7 +39,9 @@ module.exports.hello = async (event) => {
 };
 
 const sendMessageToClient = (url, connectionId, payload) => new Promise((resolve, reject) => {
+  console.log(`sending ${payload} to ${connectionId} via ${url}`);
   const apigatewaymanagementapi = new AWS.ApiGatewayManagementApi({apiVersion: '2029', endpoint: url});
+  console.log(`client created ${connectionId}`);
   apigatewaymanagementapi.postToConnection({
     ConnectionId: connectionId, // connectionId of the receiving ws-client
     Data: payload,
@@ -47,9 +49,12 @@ const sendMessageToClient = (url, connectionId, payload) => new Promise((resolve
     if (err) {
       console.log('err is', err);
       reject(err);
+    } else {
+        console.log(`data is ${data}.`);
+        resolve(data);
     }
-    resolve(data);
   });
+  console.log(`gateway invoked ${connectionId}`);
 });
 
 
@@ -121,6 +126,8 @@ module.exports.msock = async (event, context) => {
             return {};
         } catch (err) {
             console.log(`error sending to ${id}, ignoring`);
+            console.log(JSON.stringify(err));
+            return {};
         }
         });
     await Promise.all(actions);
