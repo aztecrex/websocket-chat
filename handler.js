@@ -28,6 +28,13 @@ const deleteItem = p => {
 
 const connections = process.env.DYNAMODB_TABLE;
 
+const gateway = event => {
+  const domain = event.requestContext.domainName;
+  const stage = event.requestContext.stage;
+  const callbackUrlForAWS = util.format(util.format('https://%s/%s', domain, stage));
+  return new AWS.ApiGatewayManagementApi({apiVersion: '2029', endpoint: callbackUrlForAWS});
+};
+
 module.exports.hello = async (event) => {
   return {
     statusCode: 200,
@@ -38,11 +45,9 @@ module.exports.hello = async (event) => {
   };
 };
 
-const sendMessageToClient = (url, connectionId, payload) => new Promise((resolve, reject) => {
-  console.log(`sending ${payload} to ${connectionId} via ${url}`);
-  const apigatewaymanagementapi = new AWS.ApiGatewayManagementApi({apiVersion: '2029', endpoint: url});
-  console.log(`client created ${connectionId}`);
-  apigatewaymanagementapi.postToConnection({
+const sendMessageToClient = (gw, connectionId, payload) => new Promise((resolve, reject) => {
+  console.log(`sending ${payload} to ${connectionId}`);
+  gw.postToConnection({
     ConnectionId: connectionId, // connectionId of the receiving ws-client
     Data: payload,
   }, (err, data) => {
@@ -50,7 +55,6 @@ const sendMessageToClient = (url, connectionId, payload) => new Promise((resolve
       console.log('err is', err);
       reject(err);
     } else {
-        console.log(`data is ${data}.`);
         resolve(data);
     }
   });
@@ -64,8 +68,26 @@ const activeClients = async () =>  {
   const rval = cdata.Items.map(({connectionId}) => connectionId.S);
   console.log(JSON.stringify(rval));
   return rval;
-//   return [];
 };
+
+const sendToAll = async (gw, msg) => {
+    const clients = await activeClients();
+    const actions = clients.map(async cid => sendMessageToClient(gw, cid, msg).catch(err => console.log(`error sending ${msg} to ${cid}: ${err}`)));
+    return Promise.all(actions);
+};
+
+const sendToAllExcept = async (gw, msg, xid) => {
+  const clients = await activeClients();
+  const actions = clients.map(async cid => {
+    if (xid !== cid)
+      return sendMessageToClient(gw, cid, msg).catch(err => console.log(`error sending ${msg} to ${cid}: ${err}`));
+    else
+      return Promise.resolve({});
+  });
+  return Promise.all(actions);
+};
+
+
 
 const recordConnection = async id => {
   const params = {
@@ -89,6 +111,8 @@ const forgetConnection = async id => {
 
 module.exports.connect = async (event, context) => {
   const connectionId = event.requestContext.connectionId;
+  const msg = `${event.requestContext.requestTime} ${connectionId}: ** Connected`
+  await sendToAllExcept(gateway(event), msg, connectionId);
   try {
     await recordConnection(connectionId);
   } catch(err) {
@@ -101,6 +125,8 @@ module.exports.connect = async (event, context) => {
 
 module.exports.disconnect = async (event, context) => {
   const connectionId = event.requestContext.connectionId;
+  const msg = `${event.requestContext.requestTime} ${connectionId}: ** Disconnected`
+  await sendToAllExcept(gateway(event), msg, connectionId);
   try {
     await forgetConnection(connectionId);
     return {statusCode: 200, body: `disconnected: ${connectionId}`};
@@ -112,28 +138,13 @@ module.exports.disconnect = async (event, context) => {
 };
 
 module.exports.msock = async (event, context) => {
-  const clients = await activeClients();
-
-  const domain = event.requestContext.domainName;
-  const stage = event.requestContext.stage;
-  const callbackUrlForAWS = util.format(util.format('https://%s/%s', domain, stage));
   if (event.body) {
-    const msg = `${event.requestContext.requestTime}: ${event.body}`
-    const actions = clients.map(async id => {
-        console.log("send to: ", id);
-        try {
-            await sendMessageToClient(callbackUrlForAWS, id, msg);
-            return {};
-        } catch (err) {
-            console.log(`error sending to ${id}, ignoring`);
-            console.log(JSON.stringify(err));
-            return {};
-        }
-        });
-    await Promise.all(actions);
+    const connectionId = event.requestContext.connectionId;
+    const msg = `${event.requestContext.requestTime} ${connectionId}: ${event.body}`
+    await sendToAll(gateway(event), msg, event.requestContext.connectionId);
+    return {
+      statusCode: 200
+    };
   }
-  return {
-    statusCode: 200
-  };
 };
 
